@@ -1,0 +1,48 @@
+# https://taskfile.dev
+
+version: "3"
+
+catvars:
+  REV: 1 REVENUE
+  RE: 2 ROYALTY EXPENSE
+  RI: 3 ROYALTY INCOME
+  MR: 4 MISCELLANEOUS REVENUE
+  OC: 5 OPERATING COSTS
+  LLC: 7 LAND & LEASE COSTS
+  DC: 8 DRILLING COSTS
+  CRC: 9 COMPLETION / RECOMPLETION
+  WE: 10 WELL EQUIPMENT
+  PE: 11 PLANT & BATTERY EQUIPMENT
+  PGS: 12 PIPELINE & GATHERING SYSTEMS
+  OFA: 13 OTHER FIXED ASSETS
+  GGP: 14 GEOLOGICAL & GEOPHYSICAL
+vars:
+  DATA: data/data.xlsb.csv
+
+tasks:
+  default:
+    cmds:
+      - echo "hello world"
+    silent: true
+  convert:
+    cmds:
+      - poetry run python -m xlpr-og ./data
+  test:
+    cmds:
+      - head {{.DATA}}| csvq 'select *'
+  pull:
+    cmds:
+      - task pull:"$(yq '.catvars.[]' Taskfile.yml | fzf)"
+  pull:*:
+    vars:
+      CATEGORY: "{{index .MATCH 0}}"
+    cmds:
+      - cat {{.DATA}} | csvq 'select * where Minor = "{{.CATEGORY}}"'
+  total:
+    cmds:
+      - task total:"$(yq '.catvars.[]' Taskfile.yml | fzf)"
+  total:*:
+    vars:
+      CATEGORY: "{{index .MATCH 0}}"
+    cmds:
+      - cat {{.DATA}} | yq -p=csv '(.[] | select (.Minor == "{{.CATEGORY}}")| .["Grand Total"])'
