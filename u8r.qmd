@@ -1,0 +1,122 @@
+---
+title: Financial Report
+authors:
+  - name: Matt Ji
+    affiliation: Bountystash
+    roles: code monkey
+    corresponding: true
+  - name: Aigerim
+    affiliation: Canada
+    roles: O&G expert
+    corresponding: true
+bibliography: references.bib
+---
+
+## From an Excel financial spreadsheet to graph
+What is the best way to do it?
+
+Many engineers fiddle with Excel's graphing and chat capabilities but it often costs the company a lot of time. Additionally, they are not finance experts and it is a greater cognitive load to process what line items are revenue/costs in the context that is required for reporting and presenting to management the best course of action. It takes a slight logic error of mismanaging rows and columns that can lead to inaccuracy and double checking things on a GUI-based excel sheet requires manually re-formatting charts and presentations in the Engineer's natural workflow of data discovery.
+
+If the engineer is fluent in a data processing programming language like python, R or SQL, then the task is simply to convert the Excel binary format `.xlsb` into `.csv` or `.sqlite` respectively.
+
+However, one of the many drawbacks of data processing static format data like csv, is that when it isn't properly formatted, or if the xlsb file changes on the backend, automation and the work done to streamline and automate reporting also goes out the window.
+
+But unlike Excel charting, this still has a path forward for cutting down the workload significantly by making the document processing either a guided tutorial or convert the tooling into a CLI or TUI interface. A web-interface is possible and as we explore the options, we will examine the pros and cons.
+
+The goal of this project is to programmatically streamline report while granting the end user the maximum level of flexibility at formatting, control, and adaptability for the backend and frontend tools.
+
+## Scoping the data
+
+The client has submitted a sample xlsb spreadsheet of revenue and various expenses.
+
+The file itself is not too large to warrant a sql database and there wasn't a specified requirement of simultaneous access to the data so local data processing with `.csv` with a dataframe processing unit a la pandas or polars might offer the best utility and performance. It may even be simpler to pre-process .csv using `awk` and other string formatting utilities directly if the headers are predictable enough.
+
+## XLSB to CSV
+The first step of the conversion is using a python script that converts xlsb to csv.
+
+The script is labeled 'script.py'
+
+Because it requires several python dependencies, there's multiple ways to accomplish dependency stitching.
+
+One way that I found to be superior for the purposes of asset-light development platform is nix.
+Under the hood of [replit](https://replit.com) is nix packagement management and by declaring your packages upfront, you don't need to hassle with many pip install commands, although you still need to for various modules that you add that may be idiosyncratic and are not part of nixpkgs yet. I was a little lazy and pip installed yaml. But I figured out and troubleshooted this environment so that I can get a full quarto environment set up to display pdfs, html and blogs with rendered code all from the terminal and on a replit instance.
+
+Here is the `replit.nix`
+```nix
+{ pkgs }:
+{
+  deps = [
+  pkgs.python3
+   pkgs.python311Packages.pyzmq
+  pkgs.zip
+    pkgs.quarto
+    pkgs.python311Packages.jupyter-full
+  pkgs.python311Packages.pandas
+  pkgs.python311Packages.pyxlsb
+   ];
+}```
+
+For conversion I found a script on [github](https://github.com/spajai/microsoft-xlsb-to-csv-converter) that does the trick. It heavily relies on the `pyxlsb` python module, and it does have its own flaws that it doesn't go through all of the sheets.
+Modifying it for the purposes of the test data:
+line 23 should be 9 (the header height) and line 27 should have 40 (for the table width)
+Those modifications alone should output a near text to text rendering in csv with this simple command:
+```shell
+  python script.py .
+```
+Even though it omits the other worksheets, it is as simple to include as running a for loop and modifying line 19 to add in the [read_excel](https://pandas.pydata.org/docs/reference/api/pandas.read_excel.html) arguments the sheet name. It is up to the reader as to whether the putput should also be on the same one csv file or have sheets splayed out in the directory. As is, the script converts all files with .xlsb extensions for bulk processing and therefore, it's more a matter of naming conventions for the end user.
+ 
+## Graphing
+One of the hard requirements for the client is that graphical visualization is paramount.
+
+But since we're dealing in python rendered quarto documents; graphing and plotting should be a breeze while having it portable and human readable.
+
+For every new graphing or calculator module with new fresh imports, it may require an additional `python -m pip install <module>` and it is best practices to include a requirements.txt for a simple pip install -r requirements.txt or place it in nix or poetry. Python environments are up to the user's preference and oversight.
+
+Below is a demo sample of graphing done in an quarto document from the first tutorial page:
+```{python}
+#| label: fig-polar
+#| fig-cap: "A line plot on a polar axis"
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+r = np.arange(0, 2, 0.01)
+theta = 2 * np.pi * r
+fig, ax = plt.subplots(
+  subplot_kw = {'projection': 'polar'}
+)
+
+ax.plot(theta, r)
+ax.set_rticks([0.5, 1, 1.5, 2])
+ax.grid(True)
+plt.show()
+```
+One additional note is that the User/Client will need to define their folder structure preference. A data folder should be kept separated and consistently relative to the project folder or within. But since the script for conversion is a command line arg, it isn't necessary but for rendering the quarto documents that refer to the data and the artifacts post-conversion to csv, we will need a _data folder at a later date. 
+
+## Quarto magic
+Now it is time to render or preview the document. Quarto under the hood is a CLI program that has a webserver and pandocs built-in with interface to execute jupytr commands (python, julia, r).
+What makes this magical is that the end user preparing the document can have exquisite control of the content and procedural formatting all within a markdown flavored doc that is easily readable and designed for editing.
+To start a project, simple type this into the console and press enter:
+```
+  quarto create
+```
+When ready, execute this command when cd'd in the proejct folder where the `_quarto.yml` file resides
+```
+  quarto render
+```
+## Final notes and future development
+It's as simple as that from data to reporting that has templating, good ergonomics and dependency management for the backend.
+
+This document isn't a [quarto](https://quarto.org/docs) tutorial but more of an internal document passed along to share this workflow design and process. Many technologies were considered:
+- csvq
+- [yq](https://mikefarah.gitbook.io/yq)
+- [taskfile](https://taskfile.dev)
+- sqlite
+- duckdb
+
+While many of the above mentioned solutions can be considered a better or more appropriate fit tool for the job, they are not within the skill set of a vast majority of users to tinker with and implement on their own.
+For example yq is a fast yaml parser written in go. CSV data can be easily converted into yaml whereby structured trees can implicitly decategorize certain rows that are a filler in the test data. However, the language and recipe of yq is a bit alien involving a lot of (i.e., '.[x |x ]') syntax that can be a bit undecipherable unless the user is dedicated on creating an entire workflow in stringified data, yq is a complement to jq and csv.
+
+SQL based tools offer a lot of raw performance and data-integrity and utility but can be extremely difficult to parse correctly and import. Requirements and best practices are name keys appropriately so they don't conflict on a type level. The test data fails this test because dates are YYYY-MM and the last header 'Grand Total' has a space. SQL will unfortunately cough the column as un-keyable unless some data scrubbing can be done which requires the end user to hold onto a build or migration artifact that book-keeps the renaming for querying.
+
+It is up to the client if a memory-performant database is desirable when this reporting format scales up.
