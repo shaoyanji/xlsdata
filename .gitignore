@@ -5,3 +5,4 @@ md.md
 pyxlsb2.py
 sqlstatement.sql
 xlpr-og/__pycache__
+*.csv
